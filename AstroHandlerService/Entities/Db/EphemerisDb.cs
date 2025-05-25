@@ -15,15 +15,15 @@ namespace AstroHandlerService.Entities.Db
         public long? Id { get; set; }
         public DateTime? DateTime { get; set; }
 
-        public double? SunDegrees { get; set; }
-        public double? MoonDegrees { get; set; }
-        public double? MercuryDegrees { get; set; }
-        public double? VenusDegrees { get; set; }
-        public double? MarsDegrees { get; set; }
-        public double? JupiterDegrees { get; set; }
-        public double? SaturnDegrees { get; set; }
-        public double? UranDegrees { get; set; }
-        public double? NeptuneDegrees { get; set; }
-        public double? PlutoDegrees { get; set; }
+        public double? SunAngles { get; set; }
+        public double? MoonAngles { get; set; }
+        public double? MercuryAngles { get; set; }
+        public double? VenusAngles { get; set; }
+        public double? MarsAngles { get; set; }
+        public double? JupiterAngles { get; set; }
+        public double? SaturnAngles { get; set; }
+        public double? UranAngles { get; set; }
+        public double? NeptuneAngles { get; set; }
+        public double? PlutoAngles { get; set; }
     }
 }

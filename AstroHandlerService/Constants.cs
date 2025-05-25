@@ -10,8 +10,8 @@ namespace AstroHandlerService
     {
         //Common
         public static ushort ZODIAC_ZERO = 0;
-        public static ushort ZODIAC_DEGREES = 30;
-        public static ushort CIRCLE_DEGREES = 360;
+        public static ushort ZODIAC_ANGLES = 30;
+        public static ushort CIRCLE_ANGLES = 360;
 
         //Aspects
         public static ushort CONJUNCTION = 0;

@@ -7,11 +7,11 @@ using AstroHandlerService.Entities.Enums;
 
 namespace AstroHandlerService.Entities
 {
-    public class PosInfo : Dictionary<PlanetEnum, PlanetPosInfo>
+    public class ChartInfo : Dictionary<PlanetEnum, PlanetInfo>
     {
         public DateTime DateTime { get; set; }
 
-        public PosInfo(DateTime dateTime) : base()
+        public ChartInfo(DateTime dateTime) : base()
         {
             DateTime = dateTime;
         }

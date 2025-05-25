@@ -1,19 +1,12 @@
 ﻿using Microsoft.Extensions.Options;
 using SwissEphNet;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
-using System.Threading.Tasks;
 using AstroHandlerService.Configurations;
 using AstroHandlerService.Entities;
 using AstroHandlerService.Entities.Db;
 using AstroHandlerService.Entities.Enums;
-using AstroHandlerService.Migrations;
 using AstroHandlerService.Providers;
 using AstroHandlerService.ReturnEntities;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AstroHandlerService.Services
 {
@@ -23,12 +16,12 @@ namespace AstroHandlerService.Services
         private readonly int _swissCalendarType = SwissEph.SE_GREG_CAL;
         //SwissEph.SEFLG_TRUEPOS - обеспечивает получение истинного положения, без учета аберрации.
         //SwissEph.SEFLG_SWIEPH - гарантирует использование наиболее точных эфемерид, если они доступны.
-        private readonly int _swissPositionType = SwissEph.SEFLG_TRUEPOS | SwissEph.SEFLG_SWIEPH;
+        private readonly int _swissPositionType = SwissEph.SEFLG_TRUEPOS | SwissEph.SEFLG_SWIEPH | SwissEph.SEFLG_SPEED;
 
         private SwissEph _swissEphemeris = new SwissEph();
         private readonly IEphemerisProvider _ephemerisProvider;
 
-        private readonly Dictionary<PlanetEnum, PlanetOrb> _orbPlanetDict;
+        private readonly Dictionary<PlanetEnum, AspectOrbDictionary> _planetsOrbDictionary;
 
         public SwissEphemerisService(
             IOptions<AstroConfig> astroConfiguration,
@@ -39,21 +32,21 @@ namespace AstroHandlerService.Services
             _swissEphemeris.swe_set_ephe_path(@"C:\SWEPH\EPHE");
             //_swissEphemeris.swe_set_jpl_file("C:\\SWEPH\\EPHE");
 
-            _orbPlanetDict = new Dictionary<PlanetEnum, PlanetOrb>()
+            _planetsOrbDictionary = new Dictionary<PlanetEnum, AspectOrbDictionary>()
             {
-                {PlanetEnum.Sun, new PlanetOrb(astroConfiguration.Value.Orbs.Sun)},
-                {PlanetEnum.Moon, new PlanetOrb(astroConfiguration.Value.Orbs.Moon)},
+                {PlanetEnum.Sun, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Sun)},
+                {PlanetEnum.Moon, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Moon)},
 
-                {PlanetEnum.Mercury, new PlanetOrb(astroConfiguration.Value.Orbs.Mercury)},
-                {PlanetEnum.Venus, new PlanetOrb(astroConfiguration.Value.Orbs.Venus)},
-                {PlanetEnum.Mars, new PlanetOrb(astroConfiguration.Value.Orbs.Mars)},
+                {PlanetEnum.Mercury, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Mercury)},
+                {PlanetEnum.Venus, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Venus)},
+                {PlanetEnum.Mars, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Mars)},
 
-                {PlanetEnum.Jupiter, new PlanetOrb(astroConfiguration.Value.Orbs.Jupiter)},
-                {PlanetEnum.Saturn, new PlanetOrb(astroConfiguration.Value.Orbs.Saturn)},
+                {PlanetEnum.Jupiter, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Jupiter)},
+                {PlanetEnum.Saturn, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Saturn)},
 
-                {PlanetEnum.Uran, new PlanetOrb(astroConfiguration.Value.Orbs.Uran)},
-                {PlanetEnum.Neptune, new PlanetOrb(astroConfiguration.Value.Orbs.Neptune)},
-                {PlanetEnum.Pluto, new PlanetOrb(astroConfiguration.Value.Orbs.Pluto)}
+                {PlanetEnum.Uran, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Uran)},
+                {PlanetEnum.Neptune, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Neptune)},
+                {PlanetEnum.Pluto, new AspectOrbDictionary(astroConfiguration.Value.Orbs.Pluto)}
             };
 
             _ephemerisProvider = ephemerisProvider;
@@ -71,13 +64,113 @@ namespace AstroHandlerService.Services
             return (info, result);
         }
 
-        public PosInfo GetData(DateTime dateTime)
+        public ChartInfo GetChartData(DateTime dateTime)
         {
             return GetDayInfo(dateTime, _swissPositionType, out var error);
         }
 
+        public List<AspectInfo> GetAspects(ChartInfo natalChart, ChartInfo transitChart)
+        {
+            var aspects = new List<AspectInfo>();
+
+            foreach (var natalPlanet in natalChart.Values)
+            {
+                foreach (var transitPlanet in transitChart.Values)
+                {
+                    var aspectInfo = GetAspect(natalPlanet, transitPlanet);
+
+                    if (aspectInfo.Aspect != AspectEnum.None)
+                    {
+                        aspects.Add(aspectInfo);
+                    }
+
+                }
+            }
+
+            return aspects;
+        }
+
+
+
+        public AspectInfo GetAspect(PlanetInfo natalPlanet, PlanetInfo transitPlanet)
+        {
+            if (!_planetsOrbDictionary.TryGetValue(natalPlanet.Planet, out var aspectsOrb))
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.None);
+            }
+
+            var angles = Math.Abs(natalPlanet.AbsolutAngles - transitPlanet.AbsolutAngles);
+
+            if (angles >= aspectsOrb[AspectEnum.Conjunction].Min && angles <= Constants.CIRCLE_ANGLES ||
+               angles <= aspectsOrb[AspectEnum.Conjunction].Max && angles >= Constants.ZODIAC_ZERO)
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Conjunction);
+            }
+            else if (angles >= aspectsOrb[AspectEnum.Sextile].Min && angles <= aspectsOrb[AspectEnum.Sextile].Max)
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Sextile);
+            }
+            else if (angles >= aspectsOrb[AspectEnum.Square].Min && angles <= aspectsOrb[AspectEnum.Square].Max)
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Square);
+            }
+            else if (angles >= aspectsOrb[AspectEnum.Trine].Min && angles <= aspectsOrb[AspectEnum.Trine].Max)
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Trine);
+            }
+            else if (angles >= aspectsOrb[AspectEnum.Opposition].Min && angles <= aspectsOrb[AspectEnum.Opposition].Max)
+            {
+                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Opposition);
+            }
+
+            return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.None);
+        }
+
+
+        public List<AspectInfo> GetMoonAspects(PlanetInfo moonInfo, List<ChartInfo> transitChartList)
+        {
+            var aspects = new List<AspectInfo>();
+
+            foreach (var planetEnum in Enum.GetValues(typeof(PlanetEnum)).Cast<PlanetEnum>())
+            {
+                var transitPlanetInfo = new PlanetInfo(planetEnum, 0);
+
+                var aspect = AspectEnum.None;
+
+                foreach (var transitChart in transitChartList)
+                {
+                    transitPlanetInfo = transitChart[planetEnum];
+
+                    var currentAspectInfo = GetAspect(moonInfo, transitPlanetInfo);
+
+                    if (currentAspectInfo.Aspect != AspectEnum.None)
+                    {
+                        aspect = currentAspectInfo.Aspect;
+                    }
+                }
+
+                if (aspect != AspectEnum.None)
+                {
+                    aspects.Add(new AspectInfo(moonInfo, transitPlanetInfo, aspect));
+                }
+            }
+
+            return aspects;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
         //Нужен ли Dictionary?
-        public Dictionary<DateTime, PosInfo> GetData(DateTime startTime, DateTime endTime, TimeSpan interval)
+        public Dictionary<DateTime, ChartInfo> GetData(DateTime startTime, DateTime endTime, TimeSpan interval)
         {
             if (startTime >= endTime)
             {
@@ -86,7 +179,7 @@ namespace AstroHandlerService.Services
 
             var currentTime = startTime;
 
-            var daysInfo = new Dictionary<DateTime, PosInfo>();
+            var daysInfo = new Dictionary<DateTime, ChartInfo>();
 
             while (currentTime < endTime)
             {
@@ -101,7 +194,7 @@ namespace AstroHandlerService.Services
             return daysInfo;
         }
 
-        public Dictionary<DateTime, List<AspectInfo>> ProcessAspects0(PosInfo birthDayInfo, List<PosInfo> transitList)
+        public Dictionary<DateTime, List<AspectInfo>> ProcessAspects0(ChartInfo birthDayInfo, List<ChartInfo> transitList)
         {
             var dict = new Dictionary<DateTime, List<AspectInfo>>();
 
@@ -136,7 +229,7 @@ namespace AstroHandlerService.Services
             return dict;
         }
 
-        public List<PlanetMain> ProcessAspects(PosInfo birthDayInfo, List<PosInfo> transitList)
+        public List<PlanetMain> ProcessAspects(ChartInfo birthDayInfo, List<ChartInfo> transitList)
         {
             var planetMainList = new List<PlanetMain>();
 
@@ -172,7 +265,7 @@ namespace AstroHandlerService.Services
             return planetMainList;
         }
 
-        public Dictionary<DateTime, List<AspectInfo>> ProcessAspects2(PosInfo birthDayInfo, List<PosInfo> transitList)
+        public Dictionary<DateTime, List<AspectInfo>> ProcessAspects2(ChartInfo birthDayInfo, List<ChartInfo> transitList)
         {
             var dict = new Dictionary<DateTime, List<AspectInfo>>();
 
@@ -209,7 +302,7 @@ namespace AstroHandlerService.Services
 
         public void FillEphemeris(DateTime startDate, DateTime endDate, TimeSpan interval)
         {
-            var saveDbTimeSpan = new TimeSpan(1,0,0,0);
+            var saveDbTimeSpan = new TimeSpan(1, 0, 0, 0);
 
             var startIntervalDate = startDate;
             var endIntervalDate = startIntervalDate.Add(saveDbTimeSpan);
@@ -227,19 +320,19 @@ namespace AstroHandlerService.Services
                         Id = long.Parse($"{dtInfo.Key.ToUniversalTime().ToString("yyyyMMddHHmmss")}"),
                         DateTime = dtInfo.Key.ToUniversalTime(),
 
-                        SunDegrees = dtInfo.Value[PlanetEnum.Sun].AbsolutDegrees,
-                        MoonDegrees = dtInfo.Value[PlanetEnum.Moon].AbsolutDegrees,
+                        SunAngles = dtInfo.Value[PlanetEnum.Sun].AbsolutAngles,
+                        MoonAngles = dtInfo.Value[PlanetEnum.Moon].AbsolutAngles,
 
-                        MercuryDegrees = dtInfo.Value[PlanetEnum.Mercury].AbsolutDegrees,
-                        VenusDegrees = dtInfo.Value[PlanetEnum.Venus].AbsolutDegrees,
-                        MarsDegrees = dtInfo.Value[PlanetEnum.Mars].AbsolutDegrees,
+                        MercuryAngles = dtInfo.Value[PlanetEnum.Mercury].AbsolutAngles,
+                        VenusAngles = dtInfo.Value[PlanetEnum.Venus].AbsolutAngles,
+                        MarsAngles = dtInfo.Value[PlanetEnum.Mars].AbsolutAngles,
 
-                        JupiterDegrees = dtInfo.Value[PlanetEnum.Jupiter].AbsolutDegrees,
-                        SaturnDegrees = dtInfo.Value[PlanetEnum.Saturn].AbsolutDegrees,
+                        JupiterAngles = dtInfo.Value[PlanetEnum.Jupiter].AbsolutAngles,
+                        SaturnAngles = dtInfo.Value[PlanetEnum.Saturn].AbsolutAngles,
 
-                        UranDegrees = dtInfo.Value[PlanetEnum.Uran].AbsolutDegrees,
-                        NeptuneDegrees = dtInfo.Value[PlanetEnum.Neptune].AbsolutDegrees,
-                        PlutoDegrees = dtInfo.Value[PlanetEnum.Pluto].AbsolutDegrees
+                        UranAngles = dtInfo.Value[PlanetEnum.Uran].AbsolutAngles,
+                        NeptuneAngles = dtInfo.Value[PlanetEnum.Neptune].AbsolutAngles,
+                        PlutoAngles = dtInfo.Value[PlanetEnum.Pluto].AbsolutAngles
                     };
 
                     ephList.Add(ephDb);
@@ -247,7 +340,7 @@ namespace AstroHandlerService.Services
 
                 _ephemerisProvider.AddEphemeris(ephList);
 
-                startIntervalDate =startIntervalDate.Add(saveDbTimeSpan);
+                startIntervalDate = startIntervalDate.Add(saveDbTimeSpan);
                 endIntervalDate = endIntervalDate.Add(saveDbTimeSpan);
             }
 
@@ -283,17 +376,15 @@ namespace AstroHandlerService.Services
             }
         }
 
-        private PosInfo GetDayInfo(DateTime dateTime, int iflag, out string error)
+        private ChartInfo GetDayInfo(DateTime dateTime, int iflag, out string error)
         {
             error = string.Empty;
-            var dayInfo = new PosInfo(dateTime);
+            var dayInfo = new ChartInfo(dateTime);
 
             // Преобразует дату и время в юлианскую дату
             double minutePart = (dateTime.Minute / 60.0);
             double secondPart = (dateTime.Second / 3600.0);
-            double day = _swissEphemeris.swe_julday(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour + minutePart + secondPart, _swissCalendarType) ;
-
-            double day1 = _swissEphemeris.swe_utc_to_jd(dateTime.Year, dateTime.Month, dateTime.Day, 00, 00, 00, _swissCalendarType, new double[2], ref error);
+            double day = _swissEphemeris.swe_julday(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour + minutePart + secondPart, _swissCalendarType);
 
             foreach (var planetEnum in Enum.GetValues(typeof(PlanetEnum)).Cast<PlanetEnum>())
             {
@@ -304,10 +395,22 @@ namespace AstroHandlerService.Services
             return dayInfo;
         }
 
-        private PlanetPosInfo GetPlanetInfo(PlanetEnum planetEnum, double day, int iflag, out string error)
+        public PlanetInfo GetDayInfo(PlanetEnum planetEnum, DateTime dateTime, out string error)
         {
-            var planetInfo = new PlanetPosInfo(planetEnum);
+            error = string.Empty;
 
+            // Преобразует дату и время в юлианскую дату
+            double minutePart = (dateTime.Minute / 60.0);
+            double secondPart = (dateTime.Second / 3600.0);
+            double day = _swissEphemeris.swe_julday(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour + minutePart + secondPart, _swissCalendarType);
+
+            var planetInfo = GetPlanetInfo(planetEnum, day, _swissPositionType, out error);
+
+            return planetInfo;
+        }
+
+        private PlanetInfo GetPlanetInfo(PlanetEnum planetEnum, double day, int iflag, out string error)
+        {
             var info = new double[6];
             error = string.Empty;
 
@@ -318,66 +421,9 @@ namespace AstroHandlerService.Services
                 //Console.WriteLine($"Ошибка при расчете: {error}");
             }
 
-            // Эклиптическая долгота.
-            // Градус угла планеты относительно 0 гр. Овна.
-            // Может принимать значения от 0 до 360
-            if (info == null || info[0] < 0 || info[0] > 360)
-            {
-                return null;
-            }
-
-            var zodiacInfo = ConverToZodiac(info[0]);
-
-            planetInfo.AbsolutDegrees = info[0];
-
-            planetInfo.Zodiac = zodiacInfo.Zodiac;
-            planetInfo.ZodiacDegrees = zodiacInfo.ZodiacDegrees;
+            var planetInfo = new PlanetInfo(planetEnum, info[0], info[3]);
 
             return planetInfo;
-        }
-
-        private (ZodiacEnum Zodiac, double ZodiacDegrees) ConverToZodiac(double absDegrees)
-        {
-            int zodiacInt = (int)absDegrees / Constants.ZODIAC_DEGREES;
-            var zodiacDegrees = absDegrees % Constants.ZODIAC_DEGREES;
-
-            var zodiacEnum = (ZodiacEnum)Enum.GetValues(typeof(ZodiacEnum)).GetValue(zodiacInt);
-
-            return (zodiacEnum, zodiacDegrees);
-        }
-
-        public AspectInfo GetAspect(PlanetPosInfo natalPlanet, PlanetPosInfo transitPlanet)
-        {
-            if (!_orbPlanetDict.TryGetValue(natalPlanet.Planet, out PlanetOrb planetOrb))
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.None);
-            }
-
-            var cornerDegrees = Math.Abs(natalPlanet.AbsolutDegrees - transitPlanet.AbsolutDegrees);
-
-            if (cornerDegrees >= planetOrb.AspectOrbDict[AspectEnum.Conjunction].Min && cornerDegrees <= Constants.CIRCLE_DEGREES ||
-               cornerDegrees <= planetOrb.AspectOrbDict[AspectEnum.Conjunction].Max && cornerDegrees >= Constants.ZODIAC_ZERO)
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Conjunction);
-            }
-            else if (cornerDegrees >= planetOrb.AspectOrbDict[AspectEnum.Sextile].Min && cornerDegrees <= planetOrb.AspectOrbDict[AspectEnum.Sextile].Max)
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Sextile);
-            }
-            else if (cornerDegrees >= planetOrb.AspectOrbDict[AspectEnum.Square].Min && cornerDegrees <= planetOrb.AspectOrbDict[AspectEnum.Square].Max)
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Square);
-            }
-            else if (cornerDegrees >= planetOrb.AspectOrbDict[AspectEnum.Trine].Min && cornerDegrees <= planetOrb.AspectOrbDict[AspectEnum.Trine].Max)
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Trine);
-            }
-            else if (cornerDegrees >= planetOrb.AspectOrbDict[AspectEnum.Opposition].Min && cornerDegrees <= planetOrb.AspectOrbDict[AspectEnum.Opposition].Max)
-            {
-                return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.Opposition);
-            }
-
-            return new AspectInfo(natalPlanet, transitPlanet, AspectEnum.None);
         }
     }
 }

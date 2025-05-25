@@ -34,10 +34,10 @@ namespace AstroHandlerService
 
             //var a4 = _swissEphemerisService.GetDataTest(new DateTime(2020, 1, 2));
 
-            _swissEphemerisService.FillEphemeris(
-                new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                new TimeSpan(0, 1, 0));
+            //_swissEphemerisService.FillEphemeris(
+            //    new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            //    new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            //    new TimeSpan(0, 1, 0));
 
 
 

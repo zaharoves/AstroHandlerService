@@ -4,16 +4,23 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using AstroHandlerService.Entities.Enums;
+using ProtoBuf;
 
 namespace AstroHandlerService.Entities
 {
+    [ProtoContract]
     public class AspectInfo
     {
-        public PlanetPosInfo NatalPlanet { get; set; }
-        public PlanetPosInfo TransitPlanet { get; set; }
+        [ProtoMember(1)]
+        public PlanetInfo NatalPlanet { get; set; }
+
+        [ProtoMember(2)]
+        public PlanetInfo TransitPlanet { get; set; }
+
+        [ProtoMember(3)]
         public AspectEnum Aspect { get; set; }
 
-        public AspectInfo(PlanetPosInfo natalPlanet, PlanetPosInfo transitPlanet, AspectEnum aspect)
+        public AspectInfo(PlanetInfo natalPlanet, PlanetInfo transitPlanet, AspectEnum aspect)
         {
             NatalPlanet = natalPlanet;
             TransitPlanet = transitPlanet;
