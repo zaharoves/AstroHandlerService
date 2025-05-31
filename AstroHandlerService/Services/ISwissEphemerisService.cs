@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using AstroHandlerService.Entities;
-using AstroHandlerService.Entities.Enums;
+﻿using AstroHandlerService.Entities;
+using AstroHandlerService.Enums;
 using AstroHandlerService.ReturnEntities;
 
 namespace AstroHandlerService.Services
@@ -19,7 +13,11 @@ namespace AstroHandlerService.Services
         PlanetInfo GetDayInfo(PlanetEnum planetEnum, DateTime dateTime, out string error);
 
         List<AspectInfo> GetAspects(ChartInfo natalChart, ChartInfo transitChart);
-        List<AspectInfo> GetMoonAspects(PlanetInfo moonInfo, List<ChartInfo> transitChartList);
+
+        List<AspectInfo> GetAspects(ChartInfo natalChart, ChartInfo transitChart, params PlanetEnum[] transitPlanets);
+
+
+        List<AspectInfo> GetMoonAspects(ChartInfo natalChart, DateTime startUtcDate, DateTime endUtcDate);
 
         Dictionary<DateTime, List<AspectInfo>> ProcessAspects0(ChartInfo birthDayInfo, List<ChartInfo> transitList);
 

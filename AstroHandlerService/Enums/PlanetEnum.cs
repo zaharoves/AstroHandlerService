@@ -1,6 +1,6 @@
 ﻿using SwissEphNet;
 
-namespace AstroHandlerService.Entities.Enums
+namespace AstroHandlerService.Enums
 {
     public enum PlanetEnum : ushort
     {

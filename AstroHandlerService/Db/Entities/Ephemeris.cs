@@ -1,14 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace AstroHandlerService.Entities.Db
+﻿
+namespace AstroHandlerService.Db.Entities
 {
-    public class EphemerisDb
+    public class Ephemeris
     {
-        public EphemerisDb()
+        public Ephemeris()
         {
         }
 

@@ -1,16 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using AstroHandlerService.Entities.Db;
-using AstroHandlerService.Services;
+﻿using AstroHandlerService.Db.Entities;
+using AstroHandlerService.Db.Providers;
 
 namespace AstroHandlerService.Providers
 {
     internal class EphemerisProvider : IEphemerisProvider
     {
-        public ApplicationContext _appContext { get; set; }
+        private ApplicationContext _appContext { get; set; }
 
         public EphemerisProvider(
             ApplicationContext appContext)
@@ -18,17 +13,17 @@ namespace AstroHandlerService.Providers
             _appContext = appContext;
         }
 
-        public void AddEphemeris(IEnumerable<EphemerisDb> ephemeris)
+        public void AddEphemerises(IEnumerable<Ephemeris> ephemerises)
         {
-            _appContext.EphemerisSet.AddRange(ephemeris);
+            _appContext.Ephemerises.AddRange(ephemerises);
             _appContext.SaveChanges();
 
             // получаем объекты из бд и выводим на консоль
-            var ephs = _appContext.EphemerisSet.ToList();
+            var ephs = _appContext.Ephemerises.ToList();
 
 
             //Console.WriteLine("Users list:");
-            foreach (EphemerisDb eph in ephs)
+            foreach (Ephemeris eph in ephs)
             {
                 //Console.WriteLine($"{eph.Id}.{eph.DateTime} - {eph.SunDegrees}");
             }

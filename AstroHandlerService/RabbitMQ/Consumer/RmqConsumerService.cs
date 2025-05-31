@@ -2,9 +2,8 @@
 using ProtoBuf;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
 using AstroHandlerService.Services;
-using AstroHandlerService.Entities.Enums;
+using AstroHandlerService.Enums;
 using AstroHandlerService.Entities;
 
 namespace AstroHandlerService.RMQ
@@ -14,8 +13,8 @@ namespace AstroHandlerService.RMQ
         private readonly ConnectionFactory _factory;
         private readonly string _queueName;
 
-        private RabbitMQ.Client.IConnection _connection;
-        private RabbitMQ.Client.IModel _channel;
+        private IConnection _connection;
+        private IModel _channel;
 
         private readonly string _exchangeName;
         private readonly string _routingKey;
@@ -37,7 +36,7 @@ namespace AstroHandlerService.RMQ
                 VirtualHost = rmqConfig.Value.VirtualHost
             };
 
-            _queueName = rmqConfig.Value.QueueName1;
+            _queueName = rmqConfig.Value.UserInfoQueue;
             _exchangeName = "exchangeName";
             _routingKey = "routingKey";
 
@@ -75,20 +74,21 @@ namespace AstroHandlerService.RMQ
                 {
                     var body = ea.Body.ToArray();
 
-                    RmqMessage message = null;
+                    UserInfoMessage message = null;
 
                     using (var memoryStream = new MemoryStream(body))
                     {
-                        message = Serializer.Deserialize<RmqMessage>(memoryStream);
+                        message = Serializer.Deserialize<UserInfoMessage>(memoryStream);
 
-                        Console.WriteLine($" [x] Received (Protobuf): Id={message.MessageId}, BirthDateTime={message.DatePickerData.DateTime}");
+                        Console.WriteLine($" [x] Received (Protobuf): Id={message.MessageId}, BirthDateTime={message.DateTime}");
                     }
 
                     // Имитация обработки сообщения
                     //var sendMessage = ProcessMessage(message);
-                    var nowDateTime = DateTime.Now;
-                    var aspects = ProcessDailyForecast(message, nowDateTime);
-                    var rmqMessage = ConvertToRmqMessage(message.MessageId, aspects, nowDateTime);
+                    var utcNowDate = DateTime.UtcNow;
+
+                    var aspects = ProcessDailyForecast(message, utcNowDate);
+                    var rmqMessage = ConvertToRmqMessage(message.MessageId, aspects, utcNowDate);
 
                     Console.WriteLine($" [x] Обработано: {message.MessageId}");
 
@@ -117,133 +117,44 @@ namespace AstroHandlerService.RMQ
             return Task.CompletedTask;
         }
 
-        //private string ProcessMessage0(DatePickerData message)
-        //{
-        //    var sendMessage = new StringBuilder();
-
-        //    var natalInfo = _swissEphemerisService.GetData(message.DateTime BirthDateTime.Date);
-
-        //    var intervalInfo = _swissEphemerisService.GetData(message.StartDateTime, message.EndDateTime, new TimeSpan(0, 1, 0));
-
-        //    if (intervalInfo == null)
-        //    {
-        //        return sendMessage.ToString();
-        //    }
-
-        //    //Заменить на хелпер какой-то?
-        //    var daysAspects = _swissEphemerisService.ProcessAspects0(natalInfo, intervalInfo.Values.ToList());
-
-        //    foreach (var dayAspects in daysAspects)
-        //    {
-        //        var dateTimeString = dayAspects.Key.ToString("dd MMMM yyyy");
-
-        //        sendMessage.AppendLine($"------------{dateTimeString}------------");
-        //        Console.WriteLine($"------------{dateTimeString}------------");
-
-        //        foreach (var aspect in dayAspects.Value)
-        //        {
-        //            sendMessage.AppendLine($"{aspect.TransitPlanet.Planet} - {aspect.Aspect} - {aspect.NatalPlanet.Planet}");
-        //            Console.WriteLine($"{aspect.TransitPlanet.Planet} - {aspect.Aspect} - {aspect.NatalPlanet.Planet}");
-        //        }
-
-        //        sendMessage.AppendLine();
-        //        Console.WriteLine();
-        //    }
-
-        //    return sendMessage.ToString();
-        //}
-
-        private string ProcessMessage(RmqMessage message)
+        private List<AspectInfo> ProcessDailyForecast(UserInfoMessage message, DateTime utcDateTime)
         {
-            var sendMessage = new StringBuilder();
+            //planets aspects (without moon)
+            var natalDateTime = (message.DateTime.Value - message.GmtOffset).Value;
 
-            var natalInfo = _swissEphemerisService.GetChartData(message.DatePickerData.DateTime.Value);
-
-            var intervalInfo = _swissEphemerisService.GetData(new DateTime(1901, 1, 1), new DateTime(1901, 1, 2), new TimeSpan(0, 1, 0));
-
-            if (intervalInfo == null)
-            {
-                return sendMessage.ToString();
-            }
-
-            //Заменить на хелпер какой-то?
-            var planetMainList = _swissEphemerisService.ProcessAspects(natalInfo, intervalInfo.Values.ToList());
-
-            foreach (var planetMain in planetMainList)
-            {
-                sendMessage.AppendLine($"------------{planetMain.Planet.ToString()}------------");
-                Console.WriteLine($"------------{planetMain.Planet.ToString()}------------");
-
-                var dictAspectsStr = new Dictionary<DateTime, List<string>>();
-
-                foreach (var dt in planetMain.Aspects)
-                {
-                    var aspectsStrList = new List<string>();
-
-                    foreach (var aspect in dt.Value)
-                    {
-                        aspectsStrList.Add($"{aspect.TransitPlanet.Planet} - {aspect.Aspect} - {aspect.NatalPlanet.Planet}");
-                    }
-
-                    if (aspectsStrList.Count != 1)
-                    {
-                        dictAspectsStr.Add(dt.Key, aspectsStrList);
-                    }
-                }
-
-                foreach (var dt in dictAspectsStr)
-                {
-                    if (dt.Value.Count != 0)
-                    {
-                        sendMessage.AppendLine($"{dt.Key.ToString("dd MMMM yyyy")}:");
-                        Console.WriteLine($"{dt.Key.ToString("dd MMMM yyyy")}:");
-                    }
-
-                    foreach (var aspectStr in dt.Value)
-                    {
-                        sendMessage.AppendLine($"{aspectStr}");
-                        Console.WriteLine($"{aspectStr}");
-                    }
-                }
-
-                sendMessage.AppendLine();
-                Console.WriteLine();
-            }
-
-            return sendMessage.ToString();
-        }
-
-        private List<AspectInfo> ProcessDailyForecast(RmqMessage message, DateTime dateTime)
-        {
-            //all aspects
-            var natalChart = _swissEphemerisService.GetChartData(message.DatePickerData.DateTime.Value);
-            var transitChart = _swissEphemerisService.GetChartData(dateTime);
-
-            var aspects = _swissEphemerisService.GetAspects(natalChart, transitChart);
+            var natalChart = _swissEphemerisService.GetChartData(natalDateTime);
+            var transitChart = _swissEphemerisService.GetChartData(utcDateTime);
+            
+            var planetsAspects = _swissEphemerisService.GetAspects(
+                natalChart, 
+                transitChart, 
+                PlanetEnum.Sun, 
+                PlanetEnum.Mercury, 
+                PlanetEnum.Venus, 
+                PlanetEnum.Mars, 
+                PlanetEnum.Jupiter, 
+                PlanetEnum.Saturn, 
+                PlanetEnum.Uran, 
+                PlanetEnum.Neptune, 
+                PlanetEnum.Pluto);
 
             //moon aspects
-            var currentDate = DateTime.Now;
-            var transitChartList = new List<ChartInfo>();
+            var startUtcDate = utcDateTime;
+            var endUtcDate = startUtcDate.AddDays(1);
 
-            while (currentDate < dateTime.AddHours(14))
-            {
-                var currentTransitChart = _swissEphemerisService.GetChartData(dateTime);
-                transitChartList.Add(currentTransitChart);
-
-                currentDate = currentDate.AddHours(1);
-            }
-
-            var moonAspects = _swissEphemerisService.GetMoonAspects(natalChart[PlanetEnum.Moon], transitChartList);
+            var moonAspects = _swissEphemerisService.GetMoonAspects(natalChart, startUtcDate, endUtcDate);
 
             //result aspects
-            aspects.AddRange(moonAspects);
+            var resultAspects = new List<AspectInfo>();
+            resultAspects.AddRange(moonAspects);
+            resultAspects.AddRange(planetsAspects);
 
-            return aspects;
+            return resultAspects;
         }
 
-        private RmqMessage2 ConvertToRmqMessage(string messageId, List<AspectInfo> aspects, DateTime dateTime)
+        private DailyForecastMessage ConvertToRmqMessage(string messageId, List<AspectInfo> aspects, DateTime dateTime)
         {
-            var rmqMesage = new RmqMessage2();
+            var rmqMesage = new DailyForecastMessage();
 
             rmqMesage.Id = messageId;
             rmqMesage.DateTime = dateTime;

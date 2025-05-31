@@ -1,17 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
-using System.Diagnostics;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
 using AstroHandlerService.Configurations;
-using AstroHandlerService.Entities;
 using AstroHandlerService.Providers;
 using AstroHandlerService.RMQ;
 using AstroHandlerService.Services;
-using AstroHandlerService.Tests;
+using AstroHandlerService.Db.Providers;
 
 namespace AstroHandlerService
 {
@@ -19,9 +11,34 @@ namespace AstroHandlerService
     {
         public static void Main(string[] args)
         {
+            var builder = Host.CreateDefaultBuilder(args);
+
+            var host = builder.ConfigureServices((hostContext, services) =>
+            {
+                services.Configure<AstroConfig>(hostContext.Configuration.GetSection("AstroConfiguration"));
+                services.Configure<RmqConfig>(hostContext.Configuration.GetSection("RabbitMq"));
+                services.Configure<PostgresConfig>(hostContext.Configuration.GetSection("PostgresConfig"));
+
+                //Scoped
+                services.AddSingleton<ApplicationContext>(serviceProvider =>
+                {
+                    var config = serviceProvider.GetRequiredService<IOptions<PostgresConfig>>();
+                    return new ApplicationContext(config);
+                });
+
+                services.AddSingleton<IUserProvider, UserProvider>();
+                services.AddSingleton<IEphemerisProvider, EphemerisProvider>();
+                services.AddSingleton<ISwissEphemerisService, SwissEphemerisService>();
+                services.AddSingleton<IRmqProducer, RmqProducer>();
+                services.AddHostedService<RmqConsumerService>();
+                services.AddHostedService<Worker>();
+            })
+                .Build();
+
+            host.Run();
 
 
-            
+
 
 
             //TestClass.Test1();
@@ -40,31 +57,6 @@ namespace AstroHandlerService
             //rmqConsumer.StartAsync(cancellationToken);
             ////////
 
-
-
-            var builder = Host.CreateDefaultBuilder(args);
-
-            var host = builder.ConfigureServices((hostContext, services) =>
-                {
-                    services.Configure<AstroConfig>(hostContext.Configuration.GetSection("AstroConfiguration"));
-                    services.Configure<RmqConfig>(hostContext.Configuration.GetSection("RabbitMq"));
-                    services.Configure<PostgresConfig>(hostContext.Configuration.GetSection("PostgresConfig"));
-
-                    services.AddSingleton<ApplicationContext>(serviceProvider =>
-                    {
-                        var config = serviceProvider.GetRequiredService<IOptions<PostgresConfig>>();
-                        return new ApplicationContext(config);
-                    });
-
-                    services.AddSingleton<IEphemerisProvider, EphemerisProvider>();
-                    services.AddSingleton<ISwissEphemerisService, SwissEphemerisService>();
-                    services.AddSingleton<IRmqProducer, RmqProducer>();
-                    services.AddHostedService<RmqConsumerService>();
-                    services.AddHostedService<Worker>();
-                })
-                .Build();
-
-            host.Run();
             ////////////////////////////////////////////////////
 
             //var builder = Host.CreateApplicationBuilder(args);

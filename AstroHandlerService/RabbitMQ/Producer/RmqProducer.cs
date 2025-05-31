@@ -1,12 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 using ProtoBuf;
 using RabbitMQ.Client;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using AstroHandlerService.RMQ;
 
 namespace AstroHandlerService.RMQ
 {
@@ -29,7 +23,7 @@ namespace AstroHandlerService.RMQ
                 VirtualHost = rmqConfig.Value.VirtualHost
             };
 
-            _queueName = rmqConfig.Value.QueueName2;
+            _queueName = rmqConfig.Value.DailyForecastQueue;
             _exchangeName = "exchangeName";
             _routingKey = "routingKey";
         }

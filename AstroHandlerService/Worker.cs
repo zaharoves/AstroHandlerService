@@ -1,7 +1,5 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using AstroHandlerService.Configurations;
-using AstroHandlerService.Providers;
 using AstroHandlerService.Services;
 
 namespace AstroHandlerService
@@ -15,8 +13,7 @@ namespace AstroHandlerService
         public Worker(
             ILogger<Worker> logger,
             IOptions<AstroConfig> astroConfiguration,
-            ISwissEphemerisService swissEphemerisService//fortest
-        )//, AstroConfiguration astroConfiguration
+            ISwissEphemerisService swissEphemerisService)//fortest        
         {
             _logger = logger;
             _astroConfiguration = astroConfiguration.Value;
